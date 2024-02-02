@@ -38,5 +38,5 @@ const deployUniswapV2Router02: DeployFunction = async function(
 
 export default deployUniswapV2Router02;
 deployUniswapV2Router02.tags = ["all", "periphery", "UniswapV2Router02"];
-deployUniswapV2Router02.dependencies = ["WETH9"]; // comment this if you want to deploy the Router without deploying a WETH contract
+deployUniswapV2Router02.dependencies = ["UniswapV2Factory", "WETH9"]; // remove "WETH9" if you want to deploy the Router without deploying a WETH contract
 deployUniswapV2Router02.runAtTheEnd = true;

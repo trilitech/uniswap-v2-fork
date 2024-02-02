@@ -20,6 +20,7 @@ const TEST_ADDRESSES: [string, string] = [
   '0x2000000000000000000000000000000000000000'
 ]
 
+// Only use for local tests to assure the good fork of the core
 if (!developmentChains.includes(network.name)) {
   console.log("Test are setup only for local tests...");
 } else {

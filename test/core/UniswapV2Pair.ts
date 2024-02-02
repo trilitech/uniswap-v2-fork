@@ -22,6 +22,8 @@ const setup = deployments.createFixture(async ({deployments, getNamedAccounts, e
 });
 
 const MINIMUM_LIQUIDITY = 10n ** 3n;
+
+// Only use for local tests to assure the good fork of the core
 if (!developmentChains.includes(network.name)) {
   console.log("Test are setup only for local tests...");
 } else {

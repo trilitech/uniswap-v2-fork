@@ -58,9 +58,9 @@ npx hardhat deploy --tags UniswapV2Router02 --network <your-network>
 
 ### Deploy without a new WETH contract
 
-You need to comment the line 41 in the `deploy/periphery/02-deploy-UniswapV2Router02.ts` like so:
+You need to remove `"WETH9"` the line 41 in the `deploy/periphery/02-deploy-UniswapV2Router02.ts` like so:
 ```
-// deployUniswapV2Router02.dependencies = ["WETH9"]; // comment this if you want to deploy the Router without deploying a WETH contract
+deployUniswapV2Router02.dependencies = ["UniswapV2Factory"]; // remove "WETH9" if you want to deploy the Router without deploying a WETH contract
 ```
 
 Then you can specify the address of the WETH contract you want to use on the line 19 in the same file:

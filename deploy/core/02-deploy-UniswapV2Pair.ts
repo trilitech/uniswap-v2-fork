@@ -15,13 +15,14 @@ const deployUniswapV2Pair: DeployFunction = async function(
 
   log("----------------------------------------------------");
   log("Deploying UniswapV2Pair and waiting for confirmations...");
+  // Deploy 2 fake tokens for testing the pair
   const tokenA = await deploy("TokenA", {
     contract: "contracts/core/test/ERC20.sol:ERC20",
     from: deployer,
     args: [expandTo18Decimals(10000n)],
     log: true,
     // we need to wait if on a live network so we can verify properly
-    waitConfirmations: blockConfirmation[network.name] || 1,
+    // waitConfirmations: blockConfirmation[network.name] || 1,
   });
   const tokenB = await deploy("TokenB", {
     contract: "contracts/core/test/ERC20.sol:ERC20",
@@ -29,18 +30,19 @@ const deployUniswapV2Pair: DeployFunction = async function(
     args: [expandTo18Decimals(10000n)],
     log: true,
     // we need to wait if on a live network so we can verify properly
-    waitConfirmations: blockConfirmation[network.name] || 1,
+    // waitConfirmations: blockConfirmation[network.name] || 1,
   });
 
   const uniswapV2Factory = await ethers.getContract('UniswapV2Factory', deployer) as UniswapV2Factory;
 
   // /!\ The UniswapV2Pair is created from the factory so the Pair contract is not set in hardhat-deploy env...
+  // Verify the pair isn't already deployed
   let pairAddress = await uniswapV2Factory.getPair(tokenA.address, tokenB.address);
   if (pairAddress == ethers.ZeroAddress) {
     await (await uniswapV2Factory.createPair(tokenA.address, tokenB.address)).wait();
     pairAddress = await uniswapV2Factory.getPair(tokenA.address, tokenB.address);
   }
-  console.log("pairAddress: ", pairAddress);
+  // console.log("pairAddress: ", pairAddress);
 
   // verify if not on a local chain
   if (!developmentChains.includes(network.name)) {
