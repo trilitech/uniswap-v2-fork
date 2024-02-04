@@ -93,7 +93,7 @@ describe('UniswapV2Router02', () => {
   }).timeout(100000);
 
   // Add liquidity for token0 token1 in the pool
-  it("addLiquidity & removeLiquidity", async function () {
+  it("addLiquidity", async function () {
     const { deployer, uniswapV2Pair, token0, token1, uniswapV2Router02 } = await setup();
     // Setup
     const token0Amount = expandTo18Decimals(1n);
@@ -113,8 +113,8 @@ describe('UniswapV2Router02', () => {
     console.log("WOOOOOWWW:", token1Optimised);
 
     // Add liquidity
-    await token0.approve(await uniswapV2Router02.getAddress(), ethers.MaxUint256);
-    await token1.approve(await uniswapV2Router02.getAddress(), ethers.MaxUint256);
+    await (await token0.approve(await uniswapV2Router02.getAddress(), ethers.MaxUint256)).wait();
+    await (await token1.approve(await uniswapV2Router02.getAddress(), ethers.MaxUint256)).wait();
     await expect(
       uniswapV2Router02.addLiquidity(
         await token0.getAddress(),
@@ -140,19 +140,75 @@ describe('UniswapV2Router02', () => {
     expect(await uniswapV2Pair.balanceOf(deployer)).to.be.greaterThan(lpBalanceAtStart); // more lp than before
 
     // Remove liquidity
-    await uniswapV2Pair.approve(await uniswapV2Router02.getAddress(), ethers.MaxUint256);
-    await uniswapV2Router02.removeLiquidity(
-      await token0.getAddress(),
-      await token1.getAddress(),
-      await uniswapV2Pair.balanceOf(deployer),
-      0,
-      0,
-      deployer,
-      ethers.MaxUint256
-    );
+    // await uniswapV2Pair.approve(await uniswapV2Router02.getAddress(), ethers.MaxUint256);
+    // await uniswapV2Router02.removeLiquidity(
+    //   await token0.getAddress(),
+    //   await token1.getAddress(),
+    //   await uniswapV2Pair.balanceOf(deployer),
+    //   0,
+    //   0,
+    //   deployer,
+    //   ethers.MaxUint256
+    // );
 
     console.log("pair token0 balance:", await token0.balanceOf(pairAddress));
     console.log("pair token1 balance:", await token1.balanceOf(pairAddress));
 
+  }).timeout(100000);
+
+  // Remove liquidity for token0 token1 in the pool
+  it("removeLiquidity", async function () {
+    const { deployer, uniswapV2Pair, token0, token1, uniswapV2Router02 } = await setup();
+    const pairAddress = await uniswapV2Pair.getAddress();
+    const lpBalanceAtStart = await uniswapV2Pair.balanceOf(deployer);
+    const userToken0Balance = await token0.balanceOf(deployer);
+    const userToken1Balance = await token1.balanceOf(deployer);
+    const pairToken0Balance = await token0.balanceOf(pairAddress);
+    const pairToken1Balance = await token1.balanceOf(pairAddress);
+    const liquidity = lpBalanceAtStart; // same as lp balance because I will send it to the pair
+    const totalSupply = await uniswapV2Pair.totalSupply();
+    const amountToken0Received = liquidity * pairToken0Balance / totalSupply;
+    const amountToken1Received = liquidity * pairToken1Balance / totalSupply;
+
+    console.log("lp:", lpBalanceAtStart);
+    console.log("liquidity:", liquidity);
+    console.log("totalSupply:", totalSupply);
+    console.log("amountToken0Received:", amountToken0Received);
+    console.log("amountToken1Received:", amountToken1Received);
+
+    // Check if you have LP Tokens, if you don't run the test above first.
+    if (lpBalanceAtStart < 1) {
+      throw new Error("Error: you can't removeLiquidity if you have not LP tokens, run the addLiquidity test first.");
+    }
+    
+    // Remove liquidity
+    await uniswapV2Pair.approve(await uniswapV2Router02.getAddress(), ethers.MaxUint256);
+    await expect(
+      uniswapV2Router02.removeLiquidity(
+        await token0.getAddress(),
+        await token1.getAddress(),
+        lpBalanceAtStart,
+        0,
+        0,
+        deployer,
+        ethers.MaxUint256
+      )
+    )
+      .to.emit(uniswapV2Pair, 'Transfer')
+      .withArgs(deployer, pairAddress, lpBalanceAtStart)
+      .to.emit(uniswapV2Pair, 'Transfer')
+      .withArgs(pairAddress, ethers.ZeroAddress, lpBalanceAtStart)
+      .to.emit(token0, 'Transfer')
+      .withArgs(pairAddress, deployer, amountToken0Received)
+      .to.emit(token1, 'Transfer')
+      .withArgs(pairAddress, deployer, amountToken1Received)
+      .to.emit(uniswapV2Pair, 'Sync')
+      .withArgs(pairToken0Balance - amountToken0Received, pairToken1Balance - amountToken1Received)
+      .to.emit(uniswapV2Pair, 'Burn')
+      .withArgs(await uniswapV2Router02.getAddress(), amountToken0Received, amountToken1Received, deployer);
+
+    expect(await uniswapV2Pair.balanceOf(deployer)).to.eq(0);
+    expect(await token0.balanceOf(deployer)).to.eq(userToken0Balance + amountToken0Received);
+    expect(await token1.balanceOf(deployer)).to.eq(userToken1Balance + amountToken1Received);
   }).timeout(100000);
 });
