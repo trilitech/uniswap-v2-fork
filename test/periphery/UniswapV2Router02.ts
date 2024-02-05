@@ -29,27 +29,30 @@ describe('UniswapV2Router02', () => {
   it("swapTokensForExactTokens", async function () {
     const { deployer, uniswapV2Pair, token0, token1, uniswapV2Router02 } = await setup();
     const pairAddress = await uniswapV2Pair.getAddress();
-    const token0Amount = expandTo18Decimals(5n); // amount of token 0 in the pool
-    const token1Amount = expandTo18Decimals(10n); // amount of token 1 in the pool
-    const expectedSwapAmount = 557227237267357629n; // amount of token 0 user will need to send
+    let token0PairBalance = await token0.balanceOf(pairAddress);
+    let token1PairBalance = await token1.balanceOf(pairAddress);
+    const token0AmountNeeded = expandTo18Decimals(5n); // amount of token 0 in the pool
+    const token1AmountNeeded = expandTo18Decimals(10n); // amount of token 1 in the pool
     const outputAmount = expandTo18Decimals(1n); // amount of token 1 asked by the user
 
-    // add liquidity
-    const pairToken0Before = await token0.balanceOf(pairAddress);
-    const pairToken1Before = await token1.balanceOf(pairAddress);
     console.log("pair token0 balance:", await token0.balanceOf(pairAddress));
     console.log("pair token1 balance:", await token1.balanceOf(pairAddress));
 
-    if (pairToken0Before > token0Amount || pairToken1Before > token1Amount)
-      throw new Error("Error: too much tokens are in the pair, re deploy a new one");
-    await (await token0.transfer(await uniswapV2Pair.getAddress(), token0Amount - pairToken0Before)).wait();
-    await (await token1.transfer(await uniswapV2Pair.getAddress(), token1Amount - pairToken1Before)).wait();
-    await (await uniswapV2Pair.mint(deployer)).wait(); // mint LP tokens
+    // add liquidity if needed
+    if (token0PairBalance < token0AmountNeeded && token1PairBalance < token1AmountNeeded) {
+      await (await token0.transfer(pairAddress, token0AmountNeeded - token0PairBalance)).wait();
+      await (await token1.transfer(pairAddress, token1AmountNeeded - token1PairBalance)).wait();
+      await (await uniswapV2Pair.mint(deployer)).wait(); // mint LP tokens
+      token0PairBalance = await token0.balanceOf(pairAddress);
+      token1PairBalance = await token1.balanceOf(pairAddress);
+    }
 
     console.log("pair token0 balance:", await token0.balanceOf(pairAddress));
     console.log("pair token1 balance:", await token1.balanceOf(pairAddress));
 
-    console.log("quote:", await uniswapV2Router02.getAmountIn(outputAmount, token0Amount, token1Amount));
+    const expectedSwapAmount = await uniswapV2Router02.getAmountIn(outputAmount, await token0.balanceOf(pairAddress), await token1.balanceOf(pairAddress)); // amount of token 0 user will need to send
+
+    console.log("quote:", await uniswapV2Router02.getAmountIn(outputAmount, await token0.balanceOf(pairAddress), await token1.balanceOf(pairAddress)));
 
     // snapshot user balance before executions
     const userBalance0AtStart = await token0.balanceOf(deployer);
@@ -74,7 +77,7 @@ describe('UniswapV2Router02', () => {
       .to.emit(token1, 'Transfer')
       .withArgs(await uniswapV2Pair.getAddress(), deployer, outputAmount) // token1 transfer from pool to user
       .to.emit(uniswapV2Pair, 'Sync')
-      .withArgs(token0Amount + expectedSwapAmount, token1Amount - outputAmount) // sync balance of token0 and token1
+      .withArgs(token0PairBalance + expectedSwapAmount, token1PairBalance - outputAmount) // sync balance of token0 and token1
       .to.emit(uniswapV2Pair, 'Swap')
       .withArgs(await uniswapV2Router02.getAddress(), expectedSwapAmount, 0, 0, outputAmount, deployer); // swap event
     // Check the balances after swap for user
@@ -85,8 +88,11 @@ describe('UniswapV2Router02', () => {
     expect(await token1.balanceOf(pairAddress)).to.equal(pairBalance1AtStart - outputAmount);
 
     // remove liquidity
-    await uniswapV2Pair.transfer(pairAddress, await uniswapV2Pair.balanceOf(deployer));
-    await (await uniswapV2Pair.burn(deployer)).wait(); // burn LP tokens
+    const lpBalance = await uniswapV2Pair.balanceOf(deployer);
+    if (lpBalance > 0) {
+      await uniswapV2Pair.transfer(pairAddress, lpBalance);
+      await (await uniswapV2Pair.burn(deployer)).wait(); // burn LP tokens
+    }
 
     console.log("pair token0 balance:", await token0.balanceOf(pairAddress));
     console.log("pair token1 balance:", await token1.balanceOf(pairAddress));
@@ -96,8 +102,8 @@ describe('UniswapV2Router02', () => {
   it("addLiquidity", async function () {
     const { deployer, uniswapV2Pair, token0, token1, uniswapV2Router02 } = await setup();
     // Setup
-    const token0Amount = expandTo18Decimals(1n);
-    const token1Amount = expandTo18Decimals(5n);
+    const token0Amount = expandTo18Decimals(5n);
+    const token1Amount = expandTo18Decimals(10n);
     const pairAddress = await uniswapV2Pair.getAddress();
     const pairBalance0AtStart = await token0.balanceOf(pairAddress);
     const pairBalance1AtStart = await token1.balanceOf(pairAddress);
@@ -140,16 +146,11 @@ describe('UniswapV2Router02', () => {
     expect(await uniswapV2Pair.balanceOf(deployer)).to.be.greaterThan(lpBalanceAtStart); // more lp than before
 
     // Remove liquidity
-    // await uniswapV2Pair.approve(await uniswapV2Router02.getAddress(), ethers.MaxUint256);
-    // await uniswapV2Router02.removeLiquidity(
-    //   await token0.getAddress(),
-    //   await token1.getAddress(),
-    //   await uniswapV2Pair.balanceOf(deployer),
-    //   0,
-    //   0,
-    //   deployer,
-    //   ethers.MaxUint256
-    // );
+    const lpBalance = await uniswapV2Pair.balanceOf(deployer);
+    if (lpBalance > 0) {
+      await uniswapV2Pair.transfer(pairAddress, lpBalance);
+      await (await uniswapV2Pair.burn(deployer)).wait(); // burn LP tokens
+    }
 
     console.log("pair token0 balance:", await token0.balanceOf(pairAddress));
     console.log("pair token1 balance:", await token1.balanceOf(pairAddress));
@@ -160,7 +161,14 @@ describe('UniswapV2Router02', () => {
   it("removeLiquidity", async function () {
     const { deployer, uniswapV2Pair, token0, token1, uniswapV2Router02 } = await setup();
     const pairAddress = await uniswapV2Pair.getAddress();
-    const lpBalanceAtStart = await uniswapV2Pair.balanceOf(deployer);
+    let lpBalanceAtStart = await uniswapV2Pair.balanceOf(deployer);
+    // Check if you have LP Tokens, add liquidity if you don't
+    if (lpBalanceAtStart < 1) {
+      await (await token0.transfer(pairAddress, expandTo18Decimals(5n))).wait();
+      await (await token1.transfer(pairAddress, expandTo18Decimals(10n))).wait();
+      await (await uniswapV2Pair.mint(deployer)).wait(); // mint LP tokens
+      lpBalanceAtStart = await uniswapV2Pair.balanceOf(deployer);
+    }
     const userToken0Balance = await token0.balanceOf(deployer);
     const userToken1Balance = await token1.balanceOf(deployer);
     const pairToken0Balance = await token0.balanceOf(pairAddress);
@@ -176,11 +184,6 @@ describe('UniswapV2Router02', () => {
     console.log("amountToken0Received:", amountToken0Received);
     console.log("amountToken1Received:", amountToken1Received);
 
-    // Check if you have LP Tokens, if you don't run the test above first.
-    if (lpBalanceAtStart < 1) {
-      throw new Error("Error: you can't removeLiquidity if you have not LP tokens, run the addLiquidity test first.");
-    }
-    
     // Remove liquidity
     await uniswapV2Pair.approve(await uniswapV2Router02.getAddress(), ethers.MaxUint256);
     await expect(
