@@ -1,6 +1,6 @@
 import { deployments, ethers, network } from "hardhat";
 import { expect } from "chai";
-import { ERC20, UniswapV2Factory, UniswapV2Router02, uniswap } from "../../typechain-types";
+import { ERC20, UniswapV2Factory, UniswapV2Pair, UniswapV2Router02, uniswap } from "../../typechain-types";
 import { developmentChains } from "../../helper-hardhat-config";
 import { expandTo18Decimals } from "../shared/utilities";
 
@@ -14,7 +14,7 @@ const setup = deployments.createFixture(async ({deployments, getNamedAccounts, e
   const tokenA = await ethers.getContract('TokenA', deployer) as ERC20;
   const tokenB = await ethers.getContract('TokenB', deployer) as ERC20;
   const uniswapV2PairAddress = await uniswapV2Factory.getPair(await tokenA.getAddress(), await tokenB.getAddress());
-  const uniswapV2Pair = (await ethers.getContractAt("contracts/core/interfaces/IUniswapV2Pair.sol:IUniswapV2Pair", uniswapV2PairAddress));
+  const uniswapV2Pair = (await ethers.getContractAt("contracts/core/interfaces/IUniswapV2Pair.sol:IUniswapV2Pair", uniswapV2PairAddress)) as unknown as UniswapV2Pair;
   const token0Address = await uniswapV2Pair.token0();
   const token0 = await tokenA.getAddress() === token0Address ? tokenA : tokenB;
   const token1 = await tokenA.getAddress() === token0Address ? tokenB : tokenA;
@@ -54,24 +54,61 @@ describe('UniswapV2Router02', () => {
     const pairBalance1AtStart = await token1.balanceOf(pairAddress);
 
     // Swap and check events
-    await token0.approve(await uniswapV2Router02.getAddress(), ethers.MaxUint256);
-    await expect(
-      uniswapV2Router02.swapTokensForExactTokens(
-        outputAmount, // amount out
-        ethers.MaxUint256, // amount in max
-        [await token0.getAddress(), await token1.getAddress()], // path
-        deployer, // to
-        ethers.MaxUint256 // deadline
-      )
-    )
-      .to.emit(token0, 'Transfer')
-      .withArgs(deployer, await uniswapV2Pair.getAddress(), expectedSwapAmount) // token0 transfer from user to the pool
-      .to.emit(token1, 'Transfer')
-      .withArgs(await uniswapV2Pair.getAddress(), deployer, outputAmount) // token1 transfer from pool to user
-      .to.emit(uniswapV2Pair, 'Sync')
-      .withArgs(token0PairBalance + expectedSwapAmount, token1PairBalance - outputAmount) // sync balance of token0 and token1
-      .to.emit(uniswapV2Pair, 'Swap')
-      .withArgs(await uniswapV2Router02.getAddress(), expectedSwapAmount, 0, 0, outputAmount, deployer); // swap event
+    await (await token0.approve(await uniswapV2Router02.getAddress(), ethers.MaxUint256)).wait();
+
+    console.log("token0 pair balance:", await token0.balanceOf(pairAddress));
+    console.log("token1 pair balance:", await token1.balanceOf(pairAddress));
+    console.log("user lp amount:", await uniswapV2Pair.balanceOf(deployer));
+    console.log("router allowance:", await uniswapV2Pair.allowance(deployer, await uniswapV2Router02.getAddress()));
+
+    // await expect(
+    //   uniswapV2Router02.swapTokensForExactTokens(
+    //     outputAmount, // amount out
+    //     ethers.MaxUint256, // amount in max
+    //     [await token0.getAddress(), await token1.getAddress()], // path
+    //     deployer, // to
+    //     ethers.MaxUint256 // deadline
+    //   )
+    // )
+    //   .to.emit(token0, 'Transfer')
+    //   .withArgs(deployer, await uniswapV2Pair.getAddress(), expectedSwapAmount) // token0 transfer from user to the pool
+    //   .to.emit(token1, 'Transfer')
+    //   .withArgs(await uniswapV2Pair.getAddress(), deployer, outputAmount) // token1 transfer from pool to user
+    //   .to.emit(uniswapV2Pair, 'Sync')
+    //   .withArgs(token0PairBalance + expectedSwapAmount, token1PairBalance - outputAmount) // sync balance of token0 and token1
+    //   .to.emit(uniswapV2Pair, 'Swap')
+    //   .withArgs(await uniswapV2Router02.getAddress(), expectedSwapAmount, 0, 0, outputAmount, deployer); // swap event
+    const receipt = await (await uniswapV2Router02.swapTokensForExactTokens(
+      outputAmount, // amount out
+      ethers.MaxUint256, // amount in max
+      [await token0.getAddress(), await token1.getAddress()], // path
+      deployer, // to
+      ethers.MaxUint256 // deadline
+    )).wait();
+
+    // Check events
+    // token0 transfer from user to the pool
+    const token0TransferEvent = (await token0.queryFilter(token0.filters.Transfer, receipt?.blockNumber, receipt?.blockNumber))[0];
+    expect(token0TransferEvent.args[0]).to.equal(deployer);
+    expect(token0TransferEvent.args[1]).to.equal(pairAddress);
+    expect(token0TransferEvent.args[2]).to.equal(expectedSwapAmount);
+    // token1 transfer from pool to user
+    const token1TransferEvent = (await token1.queryFilter(token1.filters.Transfer, receipt?.blockNumber, receipt?.blockNumber))[0];
+    expect(token1TransferEvent.args[0]).to.equal(pairAddress);
+    expect(token1TransferEvent.args[1]).to.equal(deployer);
+    expect(token1TransferEvent.args[2]).to.equal(outputAmount);
+    // sync balance of token0 and token1
+    const syncEvent = (await uniswapV2Pair.queryFilter(uniswapV2Pair.filters.Sync, receipt?.blockNumber, receipt?.blockNumber))[0];
+    expect(syncEvent.args[0]).to.equal(token0PairBalance + expectedSwapAmount);
+    expect(syncEvent.args[1]).to.equal(token1PairBalance - outputAmount);
+    // swap event
+    const swapEvent = (await uniswapV2Pair.queryFilter(uniswapV2Pair.filters.Swap, receipt?.blockNumber, receipt?.blockNumber))[0];
+    expect(swapEvent.args[0]).to.equal(await uniswapV2Router02.getAddress());
+    expect(swapEvent.args[1]).to.equal(expectedSwapAmount);
+    expect(swapEvent.args[2]).to.equal(0);
+    expect(swapEvent.args[3]).to.equal(0);
+    expect(swapEvent.args[4]).to.equal(outputAmount);
+    expect(swapEvent.args[5]).to.equal(deployer);
 
     // Check the balances after swap for user
     expect(await token0.balanceOf(deployer)).to.equal(userBalance0AtStart - expectedSwapAmount);
@@ -82,8 +119,13 @@ describe('UniswapV2Router02', () => {
 
     // remove liquidity
     const lpBalance = await uniswapV2Pair.balanceOf(deployer);
+    console.log("token0 pair balance:", await token0.balanceOf(pairAddress));
+    console.log("token1 pair balance:", await token1.balanceOf(pairAddress));
+    console.log("user lp amount:", lpBalance);
+    console.log("totalSupply:", await uniswapV2Pair.totalSupply());
+
     if (lpBalance > 0) {
-      await uniswapV2Pair.transfer(pairAddress, lpBalance);
+      await (await uniswapV2Pair.transfer(pairAddress, lpBalance)).wait();
       await (await uniswapV2Pair.burn(deployer)).wait(); // burn LP tokens
     }
   }).timeout(100000);
@@ -101,13 +143,39 @@ describe('UniswapV2Router02', () => {
 
     // Calculate the amount of token 1 optimised keep by the pool during the add liquidity
     const pairReservesBefore = await uniswapV2Pair.getReserves();
+    console.log("pairReservers:", pairReservesBefore);
     const token1Optimised = pairReservesBefore[0] > 0n ? await uniswapV2Router02.quote(token0Amount, pairReservesBefore[0], pairReservesBefore[1]) : token1Amount;
 
     // Add liquidity
     await (await token0.approve(await uniswapV2Router02.getAddress(), ethers.MaxUint256)).wait();
     await (await token1.approve(await uniswapV2Router02.getAddress(), ethers.MaxUint256)).wait();
-    await expect(
-      uniswapV2Router02.addLiquidity(
+
+    console.log("token0 pair balance:", await token0.balanceOf(pairAddress));
+    console.log("token1 pair balance:", await token1.balanceOf(pairAddress));
+    console.log("user lp amount:", await uniswapV2Pair.balanceOf(deployer));
+    console.log("router allowance:", await uniswapV2Pair.allowance(deployer, await uniswapV2Router02.getAddress()));
+
+    // await expect(
+    //   uniswapV2Router02.addLiquidity(
+    //     await token0.getAddress(),
+    //     await token1.getAddress(),
+    //     token0Amount,
+    //     token1Amount,
+    //     0,
+    //     0,
+    //     deployer,
+    //     ethers.MaxUint256
+    //   )
+    // )
+    //   .to.emit(token0, 'Transfer')
+    //   .withArgs(deployer, pairAddress, token0Amount) // token0 transfer from user to the Router
+    //   .to.emit(token1, 'Transfer')
+    //   .withArgs(deployer, pairAddress, token1Optimised) // token1 transfer from user to the Router
+    //   .to.emit(uniswapV2Pair, 'Sync')
+    //   .withArgs(pairBalance0AtStart + token0Amount, pairBalance1AtStart + token1Optimised) // sync balance of token0 and token1
+    //   .to.emit(uniswapV2Pair, 'Mint')
+    //   .withArgs(await uniswapV2Router02.getAddress(), token0Amount, token1Optimised); // pair mint lp tokens for the user
+    const receipt = await (await uniswapV2Router02.addLiquidity(
         await token0.getAddress(),
         await token1.getAddress(),
         token0Amount,
@@ -117,23 +185,37 @@ describe('UniswapV2Router02', () => {
         deployer,
         ethers.MaxUint256
       )
-    )
-      .to.emit(token0, 'Transfer')
-      .withArgs(deployer, pairAddress, token0Amount) // token0 transfer from user to the Router
-      .to.emit(token1, 'Transfer')
-      .withArgs(deployer, pairAddress, token1Optimised) // token1 transfer from user to the Router
-      .to.emit(uniswapV2Pair, 'Sync')
-      .withArgs(pairBalance0AtStart + token0Amount, pairBalance1AtStart + token1Optimised) // sync balance of token0 and token1
-      .to.emit(uniswapV2Pair, 'Mint')
-      .withArgs(await uniswapV2Router02.getAddress(), token0Amount, token1Optimised); // pair mint lp tokens for the user
+    ).wait();
+
+    // Check events
+    // token0 transfer from user to the Router
+    const token0TransferEvent = (await token0.queryFilter(token0.filters.Transfer, receipt?.blockNumber, receipt?.blockNumber))[0];
+    expect(token0TransferEvent.args[0]).to.equal(deployer);
+    expect(token0TransferEvent.args[1]).to.equal(pairAddress);
+    expect(token0TransferEvent.args[2]).to.equal(token0Amount);
+    // token1 transfer from user to the Router
+    const token1TransferEvent = (await token1.queryFilter(token1.filters.Transfer, receipt?.blockNumber, receipt?.blockNumber))[0];
+    expect(token1TransferEvent.args[0]).to.equal(deployer);
+    expect(token1TransferEvent.args[1]).to.equal(pairAddress);
+    expect(token1TransferEvent.args[2]).to.equal(token1Optimised);
+    // sync balance of token0 and token1
+    const syncEvent = (await uniswapV2Pair.queryFilter(uniswapV2Pair.filters.Sync, receipt?.blockNumber, receipt?.blockNumber))[0];
+    expect(syncEvent.args[0]).to.equal(pairBalance0AtStart + token0Amount);
+    expect(syncEvent.args[1]).to.equal(pairBalance1AtStart + token1Optimised);
+    // pair mint lp tokens for the user
+    const mintEvent = (await uniswapV2Pair.queryFilter(uniswapV2Pair.filters.Mint, receipt?.blockNumber, receipt?.blockNumber))[0];
+    expect(mintEvent.args[0]).to.equal(await uniswapV2Router02.getAddress());
+    expect(mintEvent.args[1]).to.equal(token0Amount);
+    expect(mintEvent.args[2]).to.equal(token1Optimised);
 
     // Check user have more lp than before
     expect(await uniswapV2Pair.balanceOf(deployer)).to.be.greaterThan(lpBalanceAtStart); 
 
     // Remove liquidity
     const lpBalance = await uniswapV2Pair.balanceOf(deployer);
+    console.log("lp balance:", lpBalance);
     if (lpBalance > 0) {
-      await uniswapV2Pair.transfer(pairAddress, lpBalance);
+      await (await uniswapV2Pair.transfer(pairAddress, lpBalance)).wait();
       await (await uniswapV2Pair.burn(deployer)).wait(); // burn LP tokens
     }
   }).timeout(100000);
@@ -160,30 +242,78 @@ describe('UniswapV2Router02', () => {
     const amountToken1Received = liquidity * pairToken1Balance / totalSupply;
 
     // Remove liquidity
-    await uniswapV2Pair.approve(await uniswapV2Router02.getAddress(), ethers.MaxUint256);
-    await expect(
-      uniswapV2Router02.removeLiquidity(
-        await token0.getAddress(),
-        await token1.getAddress(),
-        lpBalanceAtStart,
-        0,
-        0,
-        deployer,
-        ethers.MaxUint256
-      )
-    )
-      .to.emit(uniswapV2Pair, 'Transfer')
-      .withArgs(deployer, pairAddress, lpBalanceAtStart) // lp tokens transfer from user to pair
-      .to.emit(uniswapV2Pair, 'Transfer')
-      .withArgs(pairAddress, ethers.ZeroAddress, lpBalanceAtStart) // lp tokens transfer from pair to address zero -> burn
-      .to.emit(token0, 'Transfer')
-      .withArgs(pairAddress, deployer, amountToken0Received) // token0 transfer from pair to the user
-      .to.emit(token1, 'Transfer')
-      .withArgs(pairAddress, deployer, amountToken1Received) // token1 transfer from pair to the user
-      .to.emit(uniswapV2Pair, 'Sync')
-      .withArgs(pairToken0Balance - amountToken0Received, pairToken1Balance - amountToken1Received) // sync balance of token0 and token1
-      .to.emit(uniswapV2Pair, 'Burn')
-      .withArgs(await uniswapV2Router02.getAddress(), amountToken0Received, amountToken1Received, deployer); // burn event emitted by the router
+    await (await uniswapV2Pair.approve(await uniswapV2Router02.getAddress(), ethers.MaxUint256)).wait();
+
+    console.log("token0 pair balance:", await token0.balanceOf(pairAddress));
+    console.log("token1 pair balance:", await token1.balanceOf(pairAddress));
+    console.log("user lp amount:", await uniswapV2Pair.balanceOf(deployer));
+    console.log("router allowance:", await uniswapV2Pair.allowance(deployer, await uniswapV2Router02.getAddress()));
+
+    // await expect(
+    //   uniswapV2Router02.removeLiquidity(
+    //     await token0.getAddress(),
+    //     await token1.getAddress(),
+    //     lpBalanceAtStart,
+    //     0,
+    //     0,
+    //     deployer,
+    //     ethers.MaxUint256
+    //   )
+    // )
+    //   .to.emit(uniswapV2Pair, 'Transfer')
+    //   .withArgs(deployer, pairAddress, lpBalanceAtStart) // lp tokens transfer from user to pair
+    //   .to.emit(uniswapV2Pair, 'Transfer')
+    //   .withArgs(pairAddress, ethers.ZeroAddress, lpBalanceAtStart) // lp tokens transfer from pair to address zero -> burn
+    //   .to.emit(token0, 'Transfer')
+    //   .withArgs(pairAddress, deployer, amountToken0Received) // token0 transfer from pair to the user
+    //   .to.emit(token1, 'Transfer')
+    //   .withArgs(pairAddress, deployer, amountToken1Received) // token1 transfer from pair to the user
+    //   .to.emit(uniswapV2Pair, 'Sync')
+    //   .withArgs(pairToken0Balance - amountToken0Received, pairToken1Balance - amountToken1Received) // sync balance of token0 and token1
+    //   .to.emit(uniswapV2Pair, 'Burn')
+    //   .withArgs(await uniswapV2Router02.getAddress(), amountToken0Received, amountToken1Received, deployer); // burn event emitted by the router
+    
+    const receipt = await (await uniswapV2Router02.removeLiquidity(
+      await token0.getAddress(),
+      await token1.getAddress(),
+      lpBalanceAtStart,
+      0,
+      0,
+      deployer,
+      ethers.MaxUint256
+    )).wait();
+
+    // Check events
+    // lp tokens transfer from user to pair
+    const lpTokenTransferEvent = (await uniswapV2Pair.queryFilter(uniswapV2Pair.filters.Transfer, receipt?.blockNumber, receipt?.blockNumber))[0];
+    expect(lpTokenTransferEvent.args[0]).to.equal(deployer);
+    expect(lpTokenTransferEvent.args[1]).to.equal(pairAddress);
+    expect(lpTokenTransferEvent.args[2]).to.equal(lpBalanceAtStart);
+    // lp tokens transfer from pair to address zero -> burn
+    const lpTokenBurnEvent = (await uniswapV2Pair.queryFilter(uniswapV2Pair.filters.Transfer, receipt?.blockNumber, receipt?.blockNumber))[1];
+    expect(lpTokenBurnEvent.args[0]).to.equal(pairAddress);
+    expect(lpTokenBurnEvent.args[1]).to.equal(ethers.ZeroAddress);
+    expect(lpTokenBurnEvent.args[2]).to.equal(lpBalanceAtStart);
+    // token0 transfer from pair to the user
+    const token0TransferEvent = (await token0.queryFilter(token0.filters.Transfer, receipt?.blockNumber, receipt?.blockNumber))[0];
+    expect(token0TransferEvent.args[0]).to.equal(pairAddress);
+    expect(token0TransferEvent.args[1]).to.equal(deployer);
+    expect(token0TransferEvent.args[2]).to.equal(amountToken0Received);
+    // token1 transfer from pair to the user
+    const token1TransferEvent = (await token1.queryFilter(token1.filters.Transfer, receipt?.blockNumber, receipt?.blockNumber))[0];
+    expect(token1TransferEvent.args[0]).to.equal(pairAddress);
+    expect(token1TransferEvent.args[1]).to.equal(deployer);
+    expect(token1TransferEvent.args[2]).to.equal(amountToken1Received);
+    // sync balance of token0 and token1
+    const pairSyncEvent = (await uniswapV2Pair.queryFilter(uniswapV2Pair.filters.Sync, receipt?.blockNumber, receipt?.blockNumber))[0];
+    expect(pairSyncEvent.args[0]).to.equal(pairToken0Balance - amountToken0Received);
+    expect(pairSyncEvent.args[1]).to.equal(pairToken1Balance - amountToken1Received);
+    // burn event emitted by the router
+    const pairBurnEvent = (await uniswapV2Pair.queryFilter(uniswapV2Pair.filters.Burn, receipt?.blockNumber, receipt?.blockNumber))[0];
+    expect(pairBurnEvent.args[0]).to.equal(await uniswapV2Router02.getAddress());
+    expect(pairBurnEvent.args[1]).to.equal(amountToken0Received);
+    expect(pairBurnEvent.args[2]).to.equal(amountToken1Received);
+    expect(pairBurnEvent.args[3]).to.equal(deployer);
 
     // User's lp balance should be empty
     expect(await uniswapV2Pair.balanceOf(deployer)).to.eq(0);
