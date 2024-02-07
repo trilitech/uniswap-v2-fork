@@ -29,7 +29,9 @@ NIGHTLY_PRIVATE_KEY=<nightly-private-key>
 
 ---
 
-## 1. Deploy factory (core)
+## 0. Deploy Uniswap v2 protocol
+
+### Deploy factory (core)
 
 You can then start by deploying the factory of UniswapV2 from the core:
 ```
@@ -38,7 +40,7 @@ npx hardhat deploy --tags UniswapV2Factory --network <your-network>
 
 **Important:** you need to copy the code hash printed during the deployment. If you missed it, you can go on the explorer and in the read contract part, find the `INIT_CODE_PAIR_HASH`.
 
-## 2. Deploy Router (periphery)
+### Deploy Router (periphery)
 
 The first thing you need to do is to modify the hash in the library `contracts/periphery/libraries/UniswapV2Library.sol` line 24 with your own code hash from the deployment of your factory (without the 0x):
 ```
@@ -49,14 +51,14 @@ Then you have two possibilities:
 1. you want to deploy a new WETH contract with the router
 2. you want to use an already deployd WETH contract
 
-### Deploy with a new WETH contract
+#### Deploy with a new WETH contract
 
 You don't need to change anything in the code, just run the command:
 ```
 npx hardhat deploy --tags UniswapV2Router02 --network <your-network>
 ```
 
-### Deploy without a new WETH contract
+#### Deploy without a new WETH contract
 
 You need to remove `"WETH9"` the line 41 in the `deploy/periphery/02-deploy-UniswapV2Router02.ts` like so:
 ```
@@ -72,4 +74,27 @@ const wethAddress = "weth_address";
 You can finally run the command:
 ```
 npx hardhat deploy --tags UniswapV2Router02 --network <your-network>
+```
+
+## 1. Set up the pair
+
+You should have the protocol itself deployed. You now need to create a pair from the factory.
+
+Here is the command to deploy 2 new ERC20 tokens and their pair on the Uniswap protocol:
+```
+npx hardhat deploy --tags UniswapV2Pair --network <your-network>
+```
+
+**Note:** if you want to use 2 existing tokens for the pair, you have to modify the `deploy/core/02-deploy-UniswapV2Pair.ts` script.
+
+## 2., 3. and 4. Tests
+
+If you want to launch the tests, you can run:
+```
+npx hardhat test test/periphery/UniswapV2Router02.ts --network <your-network>
+```
+
+**Note:** you can the launch each test individually by using the `--grep` flag and the name of the test after. Example:
+```
+npx hardhat test test/periphery/UniswapV2Router02.ts --network <your-network> --grep "addLiquidity"
 ```
