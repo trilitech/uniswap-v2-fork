@@ -5,6 +5,6 @@ export const developmentChains = ["hardhat", "localhost"];
 export const blockConfirmation: {[key: string]: number} = {
   sepolia: 6,
   mumbai: 6,
-  etherlink: 6,
-  nightly: 6
+  etherlink: 2,
+  nightly: 2
 }
