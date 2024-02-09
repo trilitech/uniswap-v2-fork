@@ -4,8 +4,6 @@ import { ERC20, UniswapV2Factory, UniswapV2Pair, UniswapV2Router02, uniswap } fr
 import { developmentChains } from "../../helper-hardhat-config";
 import { expandTo18Decimals } from "../shared/utilities";
 
-const MINIMUM_LIQUIDITY = 10n ** 3n;
-
 const setup = deployments.createFixture(async ({deployments, getNamedAccounts, ethers}, options) => {
   if (developmentChains.includes(network.name))
     await deployments.fixture(["UniswapV2Pair", "UniswapV2Router02"]); // ensure you start from a fresh deployments
@@ -53,31 +51,8 @@ describe('UniswapV2Router02', () => {
     const pairBalance0AtStart = await token0.balanceOf(pairAddress);
     const pairBalance1AtStart = await token1.balanceOf(pairAddress);
 
-    // Swap and check events
+    // Approve router to transfer funds
     await (await token0.approve(await uniswapV2Router02.getAddress(), ethers.MaxUint256)).wait();
-
-    console.log("token0 pair balance:", await token0.balanceOf(pairAddress));
-    console.log("token1 pair balance:", await token1.balanceOf(pairAddress));
-    console.log("user lp amount:", await uniswapV2Pair.balanceOf(deployer));
-    console.log("router allowance:", await uniswapV2Pair.allowance(deployer, await uniswapV2Router02.getAddress()));
-
-    // await expect(
-    //   uniswapV2Router02.swapTokensForExactTokens(
-    //     outputAmount, // amount out
-    //     ethers.MaxUint256, // amount in max
-    //     [await token0.getAddress(), await token1.getAddress()], // path
-    //     deployer, // to
-    //     ethers.MaxUint256 // deadline
-    //   )
-    // )
-    //   .to.emit(token0, 'Transfer')
-    //   .withArgs(deployer, await uniswapV2Pair.getAddress(), expectedSwapAmount) // token0 transfer from user to the pool
-    //   .to.emit(token1, 'Transfer')
-    //   .withArgs(await uniswapV2Pair.getAddress(), deployer, outputAmount) // token1 transfer from pool to user
-    //   .to.emit(uniswapV2Pair, 'Sync')
-    //   .withArgs(token0PairBalance + expectedSwapAmount, token1PairBalance - outputAmount) // sync balance of token0 and token1
-    //   .to.emit(uniswapV2Pair, 'Swap')
-    //   .withArgs(await uniswapV2Router02.getAddress(), expectedSwapAmount, 0, 0, outputAmount, deployer); // swap event
 
     // Estimate gas needed for the transaction
     const estimatedGas = await uniswapV2Router02.swapTokensForExactTokens.estimateGas(
@@ -87,7 +62,8 @@ describe('UniswapV2Router02', () => {
       deployer, // to
       ethers.MaxUint256 // deadline
     );
-    console.log("gas use swap:", estimatedGas);
+
+    // Swap tokens for exact tokens
     const receipt = await (await uniswapV2Router02.swapTokensForExactTokens(
       outputAmount, // amount out
       ethers.MaxUint256, // amount in max
@@ -131,11 +107,6 @@ describe('UniswapV2Router02', () => {
 
     // remove liquidity
     const lpBalance = await uniswapV2Pair.balanceOf(deployer);
-    console.log("token0 pair balance:", await token0.balanceOf(pairAddress));
-    console.log("token1 pair balance:", await token1.balanceOf(pairAddress));
-    console.log("user lp amount:", lpBalance);
-    console.log("totalSupply:", await uniswapV2Pair.totalSupply());
-
     if (lpBalance > 0) {
       await (await uniswapV2Pair.transfer(pairAddress, lpBalance)).wait();
       await (await uniswapV2Pair.burn(deployer)).wait(); // burn LP tokens
@@ -155,38 +126,11 @@ describe('UniswapV2Router02', () => {
 
     // Calculate the amount of token 1 optimised keep by the pool during the add liquidity
     const pairReservesBefore = await uniswapV2Pair.getReserves();
-    console.log("pairReservers:", pairReservesBefore);
     const token1Optimised = pairReservesBefore[0] > 0n ? await uniswapV2Router02.quote(token0Amount, pairReservesBefore[0], pairReservesBefore[1]) : token1Amount;
 
-    // Add liquidity
+    // Approve router to transfer funds
     await (await token0.approve(await uniswapV2Router02.getAddress(), ethers.MaxUint256)).wait();
     await (await token1.approve(await uniswapV2Router02.getAddress(), ethers.MaxUint256)).wait();
-
-    console.log("token0 pair balance:", await token0.balanceOf(pairAddress));
-    console.log("token1 pair balance:", await token1.balanceOf(pairAddress));
-    console.log("user lp amount:", await uniswapV2Pair.balanceOf(deployer));
-    console.log("router allowance:", await uniswapV2Pair.allowance(deployer, await uniswapV2Router02.getAddress()));
-
-    // await expect(
-    //   uniswapV2Router02.addLiquidity(
-    //     await token0.getAddress(),
-    //     await token1.getAddress(),
-    //     token0Amount,
-    //     token1Amount,
-    //     0,
-    //     0,
-    //     deployer,
-    //     ethers.MaxUint256
-    //   )
-    // )
-    //   .to.emit(token0, 'Transfer')
-    //   .withArgs(deployer, pairAddress, token0Amount) // token0 transfer from user to the Router
-    //   .to.emit(token1, 'Transfer')
-    //   .withArgs(deployer, pairAddress, token1Optimised) // token1 transfer from user to the Router
-    //   .to.emit(uniswapV2Pair, 'Sync')
-    //   .withArgs(pairBalance0AtStart + token0Amount, pairBalance1AtStart + token1Optimised) // sync balance of token0 and token1
-    //   .to.emit(uniswapV2Pair, 'Mint')
-    //   .withArgs(await uniswapV2Router02.getAddress(), token0Amount, token1Optimised); // pair mint lp tokens for the user
 
     // Estimate gas needed for the transaction
     const estimatedGas = await uniswapV2Router02.addLiquidity.estimateGas(
@@ -199,8 +143,8 @@ describe('UniswapV2Router02', () => {
       deployer,
       ethers.MaxUint256
     );
-    console.log("gas use addLiquidity:", estimatedGas);
 
+    // Add liquidity in the pool
     const receipt = await (await uniswapV2Router02.addLiquidity(
       await token0.getAddress(),
       await token1.getAddress(),
@@ -240,7 +184,6 @@ describe('UniswapV2Router02', () => {
 
     // Remove liquidity
     const lpBalance = await uniswapV2Pair.balanceOf(deployer);
-    console.log("lp balance:", lpBalance);
     if (lpBalance > 0) {
       await (await uniswapV2Pair.transfer(pairAddress, lpBalance)).wait();
       await (await uniswapV2Pair.burn(deployer)).wait(); // burn LP tokens
@@ -268,37 +211,8 @@ describe('UniswapV2Router02', () => {
     const amountToken0Received = liquidity * pairToken0Balance / totalSupply;
     const amountToken1Received = liquidity * pairToken1Balance / totalSupply;
 
-    // Remove liquidity
+    // Approve router to transfer LP tokens
     await (await uniswapV2Pair.approve(await uniswapV2Router02.getAddress(), ethers.MaxUint256)).wait();
-
-    console.log("token0 pair balance:", await token0.balanceOf(pairAddress));
-    console.log("token1 pair balance:", await token1.balanceOf(pairAddress));
-    console.log("user lp amount:", await uniswapV2Pair.balanceOf(deployer));
-    console.log("router allowance:", await uniswapV2Pair.allowance(deployer, await uniswapV2Router02.getAddress()));
-
-    // await expect(
-    //   uniswapV2Router02.removeLiquidity(
-    //     await token0.getAddress(),
-    //     await token1.getAddress(),
-    //     lpBalanceAtStart,
-    //     0,
-    //     0,
-    //     deployer,
-    //     ethers.MaxUint256
-    //   )
-    // )
-    //   .to.emit(uniswapV2Pair, 'Transfer')
-    //   .withArgs(deployer, pairAddress, lpBalanceAtStart) // lp tokens transfer from user to pair
-    //   .to.emit(uniswapV2Pair, 'Transfer')
-    //   .withArgs(pairAddress, ethers.ZeroAddress, lpBalanceAtStart) // lp tokens transfer from pair to address zero -> burn
-    //   .to.emit(token0, 'Transfer')
-    //   .withArgs(pairAddress, deployer, amountToken0Received) // token0 transfer from pair to the user
-    //   .to.emit(token1, 'Transfer')
-    //   .withArgs(pairAddress, deployer, amountToken1Received) // token1 transfer from pair to the user
-    //   .to.emit(uniswapV2Pair, 'Sync')
-    //   .withArgs(pairToken0Balance - amountToken0Received, pairToken1Balance - amountToken1Received) // sync balance of token0 and token1
-    //   .to.emit(uniswapV2Pair, 'Burn')
-    //   .withArgs(await uniswapV2Router02.getAddress(), amountToken0Received, amountToken1Received, deployer); // burn event emitted by the router
     
     // Estimate gas needed for the transaction
     const estimatedGas = await uniswapV2Router02.removeLiquidity.estimateGas(
@@ -310,8 +224,8 @@ describe('UniswapV2Router02', () => {
       deployer,
       ethers.MaxUint256
     );
-    console.log("gas use removeLiquidity:", estimatedGas);
 
+    // Remove liquidity in the pool
     const receipt = await (await uniswapV2Router02.removeLiquidity(
       await token0.getAddress(),
       await token1.getAddress(),
