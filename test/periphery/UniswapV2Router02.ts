@@ -55,13 +55,13 @@ describe('UniswapV2Router02', () => {
     await (await token0.approve(await uniswapV2Router02.getAddress(), ethers.MaxUint256)).wait();
 
     // Estimate gas needed for the transaction
-    const estimatedGas = await uniswapV2Router02.swapTokensForExactTokens.estimateGas(
-      outputAmount, // amount out
-      ethers.MaxUint256, // amount in max
-      [await token0.getAddress(), await token1.getAddress()], // path
-      deployer, // to
-      ethers.MaxUint256 // deadline
-    );
+    // const estimatedGas = await uniswapV2Router02.swapTokensForExactTokens.estimateGas(
+    //   outputAmount, // amount out
+    //   ethers.MaxUint256, // amount in max
+    //   [await token0.getAddress(), await token1.getAddress()], // path
+    //   deployer, // to
+    //   ethers.MaxUint256 // deadline
+    // );
 
     // Swap tokens for exact tokens
     const receipt = await (await uniswapV2Router02.swapTokensForExactTokens(
@@ -71,7 +71,7 @@ describe('UniswapV2Router02', () => {
       deployer, // to
       ethers.MaxUint256, // deadline
       // GAS PROBLEM ON ETHERLINK - TODO REMOVE THIS ONCE CORRECTED
-      { gasLimit: network.name == "etherlink" || network.name == "nightly" ? estimatedGas * 2n : estimatedGas }
+      // { gasLimit: network.name == "etherlink" || network.name == "nightly" ? estimatedGas * 2n : estimatedGas }
     )).wait();
 
     // Check events
@@ -133,16 +133,16 @@ describe('UniswapV2Router02', () => {
     await (await token1.approve(await uniswapV2Router02.getAddress(), ethers.MaxUint256)).wait();
 
     // Estimate gas needed for the transaction
-    const estimatedGas = await uniswapV2Router02.addLiquidity.estimateGas(
-      await token0.getAddress(),
-      await token1.getAddress(),
-      token0Amount,
-      token1Amount,
-      0,
-      0,
-      deployer,
-      ethers.MaxUint256
-    );
+    // const estimatedGas = await uniswapV2Router02.addLiquidity.estimateGas(
+    //   await token0.getAddress(),
+    //   await token1.getAddress(),
+    //   token0Amount,
+    //   token1Amount,
+    //   0,
+    //   0,
+    //   deployer,
+    //   ethers.MaxUint256
+    // );
 
     // Add liquidity in the pool
     const receipt = await (await uniswapV2Router02.addLiquidity(
@@ -155,7 +155,7 @@ describe('UniswapV2Router02', () => {
       deployer,
       ethers.MaxUint256,
       // GAS PROBLEM ON ETHERLINK - TODO REMOVE THIS ONCE CORRECTED
-      { gasLimit: network.name == "etherlink" || network.name == "nightly" ? estimatedGas * 2n : estimatedGas }
+      // { gasLimit: network.name == "etherlink" || network.name == "nightly" ? estimatedGas * 2n : estimatedGas }
     )).wait();
 
     // Check events
@@ -215,15 +215,15 @@ describe('UniswapV2Router02', () => {
     await (await uniswapV2Pair.approve(await uniswapV2Router02.getAddress(), ethers.MaxUint256)).wait();
     
     // Estimate gas needed for the transaction
-    const estimatedGas = await uniswapV2Router02.removeLiquidity.estimateGas(
-      await token0.getAddress(),
-      await token1.getAddress(),
-      lpBalanceAtStart,
-      0,
-      0,
-      deployer,
-      ethers.MaxUint256
-    );
+    // const estimatedGas = await uniswapV2Router02.removeLiquidity.estimateGas(
+    //   await token0.getAddress(),
+    //   await token1.getAddress(),
+    //   lpBalanceAtStart,
+    //   0,
+    //   0,
+    //   deployer,
+    //   ethers.MaxUint256
+    // );
 
     // Remove liquidity in the pool
     const receipt = await (await uniswapV2Router02.removeLiquidity(
@@ -235,7 +235,7 @@ describe('UniswapV2Router02', () => {
       deployer,
       ethers.MaxUint256,
       // GAS PROBLEM ON ETHERLINK - TODO REMOVE THIS ONCE CORRECTED
-      { gasLimit: network.name == "etherlink" || network.name == "nightly" ? estimatedGas * 2n : estimatedGas }
+      // { gasLimit: network.name == "etherlink" || network.name == "nightly" ? estimatedGas * 2n : estimatedGas }
     )).wait();
 
     // Check events
