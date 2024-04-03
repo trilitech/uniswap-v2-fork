@@ -98,3 +98,19 @@ npx hardhat test test/periphery/UniswapV2Router02.ts --network <your-network>
 ```
 npx hardhat test test/periphery/UniswapV2Router02.ts --network <your-network> --grep "addLiquidity"
 ```
+
+## NEW. Benchmark
+
+Instead of setting up the pair, we will just deploy the tokens and then let the router with `addLiquidity` both deploys the pair and adds liquidity.
+
+**Note:** Remember that you still have to deploy the factory and the router before you can use this!
+
+Just deploy the 2 tokens:
+```
+npx hardhat deploy --tags Tokens --network <your-network>
+```
+
+Then you can run the script like so:
+```
+npx hardhat run scripts/addLiquidity.ts --network <your-network>
+```
