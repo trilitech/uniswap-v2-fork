@@ -20,8 +20,6 @@ async function main() {
     0,
     owner.address,
     ethers.MaxUint256,
-    // GAS PROBLEM ON ETHERLINK - TODO REMOVE THIS ONCE CORRECTED
-    // { gasLimit: network.name == "etherlink" || network.name == "nightly" ? estimatedGas * 2n : estimatedGas }
   )).wait();
 
   console.log("The transaction made through!!");
