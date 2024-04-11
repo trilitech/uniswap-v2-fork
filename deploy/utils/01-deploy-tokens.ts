@@ -21,7 +21,7 @@ const deployTokens: DeployFunction = async function(
     args: [expandTo18Decimals(10000n)],
     log: true,
     // we need to wait if on a live network so we can verify properly
-    // waitConfirmations: blockConfirmation[network.name] || 1,
+    waitConfirmations: blockConfirmation[network.name] || 1,
   });
   const tokenD = await deploy("TokenD", {
     contract: "contracts/core/test/ERC20.sol:ERC20",
@@ -29,7 +29,7 @@ const deployTokens: DeployFunction = async function(
     args: [expandTo18Decimals(10000n)],
     log: true,
     // we need to wait if on a live network so we can verify properly
-    // waitConfirmations: blockConfirmation[network.name] || 1,
+    waitConfirmations: blockConfirmation[network.name] || 1,
   });
 
   // verify if not on a local chain

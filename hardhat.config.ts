@@ -23,24 +23,32 @@ const SEPOLIA_RPC_URL =
 const ETHERSCAN_API_KEY = 
   process.env.ETHERSCAN_API_KEY || 
   "";
-const ETHERLINK_RPC_URL =
-  process.env.ETHERLINK_RPC_URL ||
+const ETHERLINK_TESTNET_RPC_URL =
+  process.env.ETHERLINK_TESTNET_RPC_URL ||
   "https://node.ghostnet.etherlink.com";
 const ETHERLINK_API_KEY = 
   process.env.ETHERLINK_API_KEY || 
   "";
-const NIGHTLY_RPC_URL =
-  process.env.NIGHTLY_RPC_URL ||
-  "";
-// Specific private key for the nightly chain with founds
-const NIGHTLY_PRIVATE_KEY =
-  process.env.NIGHTLY_PRIVATE_KEY ||
-  "";
-const NIGHTLY_CHAINID =
-  Number(process.env.NIGHTLY_CHAINID) ||
-  31337; // local chainId -> will raise an error
-const NIGHTLY_EXPLORER =
-  process.env.NIGHTLY_EXPLORER ||
+// const NIGHTLY_RPC_URL =
+//   process.env.NIGHTLY_RPC_URL ||
+//   "";
+// // Specific private key for the nightly chain with founds
+// const NIGHTLY_PRIVATE_KEY =
+//   process.env.NIGHTLY_PRIVATE_KEY ||
+//   "";
+// const NIGHTLY_CHAINID =
+//   Number(process.env.NIGHTLY_CHAINID) ||
+//   31337; // local chainId -> will raise an error
+// const NIGHTLY_EXPLORER =
+//   process.env.NIGHTLY_EXPLORER ||
+//   "";
+
+// Binance Smart Chain
+const BSC_TESTNET_URL =
+  process.env.BSC_TESTNET_URL ||
+  "https://bsc-testnet.publicnode.com";
+const BSCSCAN_API_KEY =
+  process.env.BSCSCAN_API_KEY ||
   "";
 
 const config: HardhatUserConfig = {
@@ -74,7 +82,8 @@ const config: HardhatUserConfig = {
     },
     localhost: {
       url: "http://127.0.0.1:8545/",
-      chainId: 31337
+      chainId: 31337,
+      accounts: ["0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"]
     },
     sepolia: {
       chainId: 11155111,
@@ -86,15 +95,20 @@ const config: HardhatUserConfig = {
       url: MUMBAI_RPC_URL,
       accounts: [PRIVATE_KEY, SECOND_PRIVATE_KEY],
     },
-    etherlink: {
+    etherlinkTestnet: {
       chainId: 128123,
-      url: ETHERLINK_RPC_URL,
+      url: ETHERLINK_TESTNET_RPC_URL,
       accounts: [PRIVATE_KEY, SECOND_PRIVATE_KEY],
     },
-    nightly: {
-      chainId: NIGHTLY_CHAINID,
-      url: NIGHTLY_RPC_URL,
-      accounts: [NIGHTLY_PRIVATE_KEY, PRIVATE_KEY]
+    // nightly: {
+    //   chainId: NIGHTLY_CHAINID,
+    //   url: NIGHTLY_RPC_URL,
+    //   accounts: [NIGHTLY_PRIVATE_KEY, PRIVATE_KEY]
+    // },
+    bscTestnet: {
+      chainId: 97,
+      url: BSC_TESTNET_URL,
+      accounts: [PRIVATE_KEY],
     }
   },
   // hardhat-deploy named account system
@@ -111,7 +125,8 @@ const config: HardhatUserConfig = {
       sepolia: ETHERSCAN_API_KEY,
       polygonMumbai: POLYGONSCAN_API_KEY,
       etherlink: ETHERLINK_API_KEY,
-      nightly: ETHERLINK_API_KEY
+      // nightly: ETHERLINK_API_KEY,
+      bscTestnet: BSCSCAN_API_KEY
     },
     customChains: [
       {
@@ -124,14 +139,14 @@ const config: HardhatUserConfig = {
           browserURL: "https://testnet-explorer.etherlink.com"
         }
       },
-      {
-        network: "nightly",
-        chainId: NIGHTLY_CHAINID,
-        urls: {
-          apiURL: `${NIGHTLY_EXPLORER}api`,
-          browserURL: NIGHTLY_EXPLORER
-        }
-      }
+      // {
+      //   network: "nightly",
+      //   chainId: NIGHTLY_CHAINID,
+      //   urls: {
+      //     apiURL: `${NIGHTLY_EXPLORER}api`,
+      //     browserURL: NIGHTLY_EXPLORER
+      //   }
+      // }
     ]
   }
 };
