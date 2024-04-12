@@ -99,18 +99,20 @@ npx hardhat test test/periphery/UniswapV2Router02.ts --network <your-network>
 npx hardhat test test/periphery/UniswapV2Router02.ts --network <your-network> --grep "addLiquidity"
 ```
 
-## NEW. Benchmark
+## NEW. Scenario create pair + add liquidity in one tx
 
 Instead of setting up the pair, we will just deploy the tokens and then let the router with `addLiquidity` both deploys the pair and adds liquidity.
 
-**Note:** Remember that you still have to deploy the factory and the router before you can use this!
+**Note:** Remember that you still have to deploy the factory and the router before you can use it!
 
-Just deploy the 2 tokens:
+Deploy the 2 tokens:
 ```
 npx hardhat deploy --tags Tokens --network <your-network>
 ```
 
+By default the test is disabled, you have to remove the 'x' in front of the test line 286 in `test/periphery/UniswapV2Router02.ts`.
+
 Then you can run the script like so:
 ```
-npx hardhat run scripts/addLiquidity.ts --network <your-network>
+npx hardhat test test/periphery/UniswapV2Router02.ts --network <your-network> --grep "SPECIAL TEST"
 ```

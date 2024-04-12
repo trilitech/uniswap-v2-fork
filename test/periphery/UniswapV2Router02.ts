@@ -2,11 +2,12 @@ import { deployments, ethers, network } from "hardhat";
 import { expect } from "chai";
 import { ERC20, UniswapV2Factory, UniswapV2Pair, UniswapV2Router02, uniswap } from "../../typechain-types";
 import { developmentChains } from "../../helper-hardhat-config";
-import { expandTo18Decimals } from "../shared/utilities";
+import { expandTo18Decimals, getCreate2Address } from "../shared/utilities";
+import { ZeroAddress } from "ethers";
 
 const setup = deployments.createFixture(async ({deployments, getNamedAccounts, ethers}, options) => {
   if (developmentChains.includes(network.name))
-    await deployments.fixture(["UniswapV2Pair", "UniswapV2Router02"]); // ensure you start from a fresh deployments
+    await deployments.fixture(["UniswapV2Pair", "UniswapV2Router02", "Tokens"]); // ensure you start from a fresh deployments
   const { deployer } = await getNamedAccounts();
   const uniswapV2Factory = await ethers.getContract('UniswapV2Factory', deployer) as UniswapV2Factory;
   const tokenA = await ethers.getContract('TokenA', deployer) as ERC20;
@@ -17,8 +18,10 @@ const setup = deployments.createFixture(async ({deployments, getNamedAccounts, e
   const token0 = await tokenA.getAddress() === token0Address ? tokenA : tokenB;
   const token1 = await tokenA.getAddress() === token0Address ? tokenB : tokenA;
   const uniswapV2Router02 = await ethers.getContract('UniswapV2Router02', deployer) as UniswapV2Router02;
+  const tokenC = await ethers.getContract('TokenC', deployer) as ERC20;
+  const tokenD = await ethers.getContract('TokenD', deployer) as ERC20;
 
-  return { deployer, uniswapV2Factory, uniswapV2Pair, token0, token1, uniswapV2Router02 };
+  return { deployer, uniswapV2Factory, uniswapV2Pair, token0, token1, uniswapV2Router02, tokenC, tokenD };
 });
 
 // Tests both local and on-chain
@@ -275,5 +278,49 @@ describe('UniswapV2Router02', () => {
     // User's tokens balance should be increased
     expect(await token0.balanceOf(deployer)).to.eq(userToken0Balance + amountToken0Received);
     expect(await token1.balanceOf(deployer)).to.eq(userToken1Balance + amountToken1Received);
+  }).timeout(100000);
+
+  // This test has been add to test the call to addLiquidity on the router
+  // to both create the pair and add liquidity in the same transactions
+  // NOTE: To enable the test, remove the 'x' in front of it
+  xit("SPECIAL TEST addLiquidity: create pair + add liquidity in same tx", async function () {
+    const { deployer, uniswapV2Factory, tokenC, tokenD, uniswapV2Router02 } = await setup();
+    // Setup
+    const token0Amount = expandTo18Decimals(5n);
+    const token1Amount = expandTo18Decimals(10n);
+    const pairAddress = await uniswapV2Factory.getPair(await tokenC.getAddress(), await tokenD.getAddress());
+    if (pairAddress != ZeroAddress) {
+      // Pair already created
+      console.log("WARNING: if you want to run this test again, you need to redeploy tokenC and tokenD");
+      this.skip();
+    }
+
+    // approve the router to move tokens
+    await (await tokenC.approve(await uniswapV2Router02.getAddress(), ethers.MaxUint256)).wait();
+    await (await tokenD.approve(await uniswapV2Router02.getAddress(), ethers.MaxUint256)).wait();
+
+    // Create + add liquidity in the pair
+    await (await uniswapV2Router02.addLiquidity(
+      await tokenC.getAddress(),
+      await tokenD.getAddress(),
+      token0Amount,
+      token1Amount,
+      0,
+      0,
+      deployer,
+      ethers.MaxUint256,
+    )).wait();
+
+    // Check pair is created
+    const tokens: [string, string] = [await tokenC.getAddress(), await tokenD.getAddress()];
+    const pairBytecode = (await ethers.getContractFactory("UniswapV2Pair")).bytecode;
+    const expectedPairAddress = getCreate2Address(await uniswapV2Factory.getAddress(), tokens, pairBytecode);
+    const newPair = await uniswapV2Factory.getPair(await tokenC.getAddress(), await tokenD.getAddress());
+    expect(newPair).to.equal(expectedPairAddress);
+
+    // Check liquidity
+    const uniswapV2Pair = (await ethers.getContractAt("contracts/core/interfaces/IUniswapV2Pair.sol:IUniswapV2Pair", newPair)) as unknown as UniswapV2Pair;
+    const [reserve0, reserve1, blockTimestampLast] = await uniswapV2Pair.getReserves();
+    expect(reserve0 + reserve1).to.equal(token0Amount + token1Amount);
   }).timeout(100000);
 });
