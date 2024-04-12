@@ -41,9 +41,9 @@ const deployUniswapV2Pair: DeployFunction = async function(
   if (pairAddress == ethers.ZeroAddress) {
     await (await uniswapV2Factory.createPair(tokenA.address, tokenB.address)).wait();
     pairAddress = await uniswapV2Factory.getPair(tokenA.address, tokenB.address);
-    console.log("Pair successfully created:", pairAddress);
+    log("Pair successfully created:", pairAddress);
   } else {
-    console.log("reusing pair:", pairAddress);
+    log("reusing pair:", pairAddress);
   }
 
   // verify if not on a local chain

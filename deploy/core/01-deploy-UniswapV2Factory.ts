@@ -23,7 +23,7 @@ const deployUniswapV2Factory: DeployFunction = async function(
   });
 
   const uniswapV2FactoryContract = await ethers.getContract('UniswapV2Factory', deployer) as UniswapV2Factory;
-  console.log(`\nCODE HASH: ${await uniswapV2FactoryContract.INIT_CODE_PAIR_HASH()}\n`);
+  log(`\nCODE HASH: ${await uniswapV2FactoryContract.INIT_CODE_PAIR_HASH()}\n`);
 
   // verify if not on a local chain
   if (!developmentChains.includes(network.name)) {
