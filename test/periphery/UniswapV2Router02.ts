@@ -5,7 +5,7 @@ import { developmentChains } from "../../helper-hardhat-config";
 import { expandTo18Decimals, getCreate2Address } from "../shared/utilities";
 import { ZeroAddress } from "ethers";
 
-const setup = deployments.createFixture(async ({deployments, getNamedAccounts, ethers}, options) => {
+const setup = deployments.createFixture(async ({deployments, getNamedAccounts, ethers}, isSpecialTest = false) => {
   if (developmentChains.includes(network.name))
     await deployments.fixture(["UniswapV2Pair", "UniswapV2Router02", "Tokens"]); // ensure you start from a fresh deployments
   const { deployer } = await getNamedAccounts();
@@ -18,10 +18,15 @@ const setup = deployments.createFixture(async ({deployments, getNamedAccounts, e
   const token0 = await tokenA.getAddress() === token0Address ? tokenA : tokenB;
   const token1 = await tokenA.getAddress() === token0Address ? tokenB : tokenA;
   const uniswapV2Router02 = await ethers.getContract('UniswapV2Router02', deployer) as UniswapV2Router02;
-  const tokenC = await ethers.getContract('TokenC', deployer) as ERC20;
-  const tokenD = await ethers.getContract('TokenD', deployer) as ERC20;
 
-  return { deployer, uniswapV2Factory, uniswapV2Pair, token0, token1, uniswapV2Router02, tokenC, tokenD };
+  if (isSpecialTest) {
+    const tokenC = await ethers.getContract('TokenC', deployer) as ERC20;
+    const tokenD = await ethers.getContract('TokenD', deployer) as ERC20;
+
+    return { deployer, uniswapV2Factory, uniswapV2Pair, token0, token1, uniswapV2Router02, tokenC, tokenD };
+  }
+
+  return { deployer, uniswapV2Factory, uniswapV2Pair, token0, token1, uniswapV2Router02 };
 });
 
 // Tests both local and on-chain
@@ -284,8 +289,10 @@ describe('UniswapV2Router02', () => {
   // to both create the pair and add liquidity in the same transactions
   // NOTE: To enable the test, remove the 'x' in front of it
   xit("SPECIAL TEST addLiquidity: create pair + add liquidity in same tx", async function () {
-    const { deployer, uniswapV2Factory, tokenC, tokenD, uniswapV2Router02 } = await setup();
+    const { deployer, uniswapV2Factory, tokenC, tokenD, uniswapV2Router02 } = await setup(true);
     // Setup
+    if (tokenC == undefined || tokenD == undefined)
+      throw new Error("Deploy token C and Token D before running this test");
     const token0Amount = expandTo18Decimals(5n);
     const token1Amount = expandTo18Decimals(10n);
     const pairAddress = await uniswapV2Factory.getPair(await tokenC.getAddress(), await tokenD.getAddress());
